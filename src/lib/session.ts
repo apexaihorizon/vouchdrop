@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
+import { AppError } from './api';
 
 const secret = new TextEncoder().encode(process.env.SESSION_SECRET!);
 
@@ -55,4 +56,23 @@ export async function getSessionUserId(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export async function requireUserId(): Promise<string> {
+  const userId = await getSessionUserId();
+  if (!userId) {
+    throw new AppError('Unauthorized — please sign in first', 401);
+  }
+  return userId;
+}
+
+export async function mintSignalingTicket(params: {
+  roomId: string;
+  userId: string;
+  role: 'sender' | 'receiver';
+}): Promise<string> {
+  return new SignJWT(params)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setExpirationTime('30s')
+    .sign(secret);
 }
