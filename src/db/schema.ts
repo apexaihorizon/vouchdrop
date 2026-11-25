@@ -16,3 +16,4 @@ export const webauthnCredentials = pgTable('webauthn_credentials', {
   transports: jsonb('transports').$type<string[]>(), // JSON string e.g. '["internal","hybrid"]'
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
