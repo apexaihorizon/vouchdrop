@@ -1,3 +1,13 @@
+const SW_VERSION = 'v1.1.2';
+
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   const data = event.data.json();
@@ -8,12 +18,13 @@ self.addEventListener('push', (event) => {
     fileSize: data.fileSize,
     fileType: data.fileType,
   };
+  const roomUrl = `/app?room=${encodeURIComponent(knock.roomId)}`;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       const visibleClient = windowClients.find((client) => client.visibilityState === 'visible');
       if (visibleClient) {
-        visibleClient.postMessage({ type: 'INCOMING_KNOCK', knock });
+        visibleClient.postMessage({ type: 'INCOMING_KNOCK', knock, swVersion: SW_VERSION });
         if ('focus' in visibleClient) {
           return visibleClient.focus();
         }
@@ -27,7 +38,7 @@ self.addEventListener('push', (event) => {
         requireInteraction: true,
         data: {
           knock,
-          url: `/app?room=${encodeURIComponent(knock.roomId)}`,
+          url: roomUrl,
         },
       });
     })
@@ -37,21 +48,29 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const knock = event.notification.data?.knock;
-  const targetUrl = event.notification.data?.url || '/app';
+  const fallbackRoomUrl = knock?.roomId ? `/app?room=${encodeURIComponent(knock.roomId)}` : '/app';
+  const targetUrl =
+    typeof event.notification.data?.url === 'string' && event.notification.data.url.startsWith('/app')
+      ? event.notification.data.url
+      : fallbackRoomUrl;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      if (windowClients.length > 0) {
-        const client =
-          windowClients.find((windowClient) => windowClient.visibilityState === 'visible') || windowClients[0];
+      const appClient =
+        windowClients.find((c) => c.url.includes('/app') && c.visibilityState === 'visible') ||
+        windowClients.find((c) => c.url.includes('/app')) ||
+        windowClients[0];
+
+      if (appClient) {
         if (knock) {
-          client.postMessage({ type: 'INCOMING_KNOCK', knock });
+          appClient.postMessage({ type: 'INCOMING_KNOCK', knock, swVersion: SW_VERSION });
         }
-        if ('focus' in client) {
-          return client.focus();
+        if ('focus' in appClient) {
+          return appClient.focus();
         }
         return;
       }
+
       return clients.openWindow(targetUrl);
     })
   );

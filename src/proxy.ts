@@ -20,6 +20,14 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
   const room = searchParams.get('room');
+
+  if (pathname === '/') {
+    if (room) {
+      return NextResponse.redirect(new URL(`/app?room=${encodeURIComponent(room)}`, request.url));
+    }
+    return NextResponse.next();
+  }
+
   const roomQuery = room ? `?room=${encodeURIComponent(room)}` : '';
   const authenticated = await hasValidSession(request);
 
@@ -35,5 +43,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/app/:path*', '/auth/:path*'],
+  matcher: ['/', '/app/:path*', '/auth/:path*'],
 };

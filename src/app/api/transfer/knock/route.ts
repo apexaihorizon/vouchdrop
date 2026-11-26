@@ -47,6 +47,7 @@ export const POST = withApiHandler('transfer.knock', async (req) => {
     fileName,
     fileSize,
     fileType,
+    url: `/app?room=${encodeURIComponent(roomId)}`,
   });
 
   await Promise.allSettled(

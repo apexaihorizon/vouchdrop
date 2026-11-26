@@ -58,7 +58,10 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
     }
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker
+        .register('/sw.js', { updateViaCache: 'none' })
+        .then((reg) => reg.update().catch(() => {}))
+        .catch(() => {});
     }
 
     const urlRoom = initialRoomId ?? new URLSearchParams(window.location.search).get('room');
