@@ -27,6 +27,6 @@ export const POST = withApiHandler('push.subscribe', async (req) => {
       set: { userId, p256dh: parsed.data.keys.p256dh, auth: parsed.data.keys.auth },
     });
 
-  logEvent('info', 'push.subscribe', { userId });
+  logEvent('info', 'push.subscribed', { userId });
   return NextResponse.json({ ok: true });
 });

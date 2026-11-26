@@ -43,7 +43,7 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [sendingRecipientId, setSendingRecipientId] = useState<string | null>(null);
-  const [pushPermission, setPushPermission] = useState<NotificationPermission | null>(null);
+  const [pushState, setPushState] = useState<'checking' | 'subscribed' | 'unsubscribed' | 'error'>('checking');
   const [pushNotice, setPushNotice] = useState<string | null>(null);
   const [pairModalOpen, setPairModalOpen] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
@@ -51,17 +51,95 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
 
   const joinedRoomRef = useRef(false);
 
-  // Register SW, consume initial ?room= once & strip URL, and listen for reload-free INCOMING_KNOCK
-  useEffect(() => {
-    if ('Notification' in window) {
-      setPushPermission(Notification.permission);
+  async function syncPushSubscription(requestPermission: boolean): Promise<void> {
+    if (requestPermission) {
+      setPushNotice(null);
     }
 
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushState('unsubscribed');
+      if (requestPermission) {
+        setPushNotice('Push notifications are not supported in this browser.');
+      }
+      return;
+    }
+
+    try {
+      let permission = Notification.permission;
+      if (requestPermission && permission !== 'granted') {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission !== 'granted') {
+        setPushState('unsubscribed');
+        if (requestPermission) {
+          setPushNotice('Notification permission was not granted.');
+        }
+        return;
+      }
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        setPushState('error');
+        if (requestPermission) {
+          setPushNotice('Push notifications are not configured on this server.');
+        }
+        return;
+      }
+
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      }
+
+      const parsedSub = pushSubscribeSchema.safeParse(sub.toJSON());
+      if (!parsedSub.success) {
+        throw new AppError('INTERNAL_ERROR', 'Unable to validate browser push subscription.', 400);
+      }
+
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(parsedSub.data),
+      });
+      if (!res.ok) {
+        throw new AppError('INTERNAL_ERROR', 'Failed to save push subscription.', res.status);
+      }
+
+      setPushState('subscribed');
+      if (requestPermission) {
+        setPushNotice('Web Push notifications active.');
+      }
+    } catch (err) {
+      setPushState('error');
+      if (requestPermission) {
+        setPushNotice(toUserErrorMessage(err));
+      }
+    }
+  }
+
+  // Register SW, sync server-backed push subscription, consume initial ?room= once & strip URL, and listen for INCOMING_KNOCK
+  useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js', { updateViaCache: 'none' })
-        .then((reg) => reg.update().catch(() => {}))
-        .catch(() => {});
+        .then((reg) => {
+          void reg.update().catch(() => {});
+          if ('Notification' in window && Notification.permission === 'granted') {
+            void syncPushSubscription(false);
+          } else {
+            setPushState('unsubscribed');
+          }
+        })
+        .catch(() => {
+          setPushState('error');
+        });
+    } else {
+      setPushState('unsubscribed');
     }
 
     const urlRoom = initialRoomId ?? new URLSearchParams(window.location.search).get('room');
@@ -115,49 +193,8 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
     transfer.state === 'error';
 
   async function handleEnablePush() {
-    setPushNotice(null);
-    try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        setPushNotice('Push notifications are not supported in this browser.');
-        return;
-      }
-      const perm = await Notification.requestPermission();
-      setPushPermission(perm);
-      if (perm !== 'granted') {
-        setPushNotice('Notification permission was not granted.');
-        return;
-      }
-
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapidKey) {
-        setPushNotice('Push notifications are not configured on this server.');
-        return;
-      }
-
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      });
-
-      const parsedSub = pushSubscribeSchema.safeParse(sub.toJSON());
-      if (!parsedSub.success) {
-        throw new AppError('INTERNAL_ERROR', 'Unable to validate browser push subscription.', 400);
-      }
-
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsedSub.data),
-      });
-      if (!res.ok) {
-        throw new AppError('INTERNAL_ERROR', 'Failed to save push subscription.', res.status);
-      }
-
-      setPushNotice('Web Push notifications active.');
-    } catch (err) {
-      setPushNotice(toUserErrorMessage(err));
-    }
+    setPushState('checking');
+    await syncPushSubscription(true);
   }
 
   async function handleSignOut() {
@@ -211,13 +248,23 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {pushPermission === 'granted' ? (
+          {pushState === 'subscribed' ? (
             <Badge tone="emerald" mono={false} className="min-h-[44px] px-3 text-xs">
               <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" aria-hidden="true" />
               Push Active
             </Badge>
           ) : (
-            <Button variant="secondary" size="sm" onClick={() => void handleEnablePush()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={pushState === 'checking'}
+              className={
+                pushState === 'error'
+                  ? 'border-[var(--color-warning)]/50 bg-[var(--color-warning)]/15 text-amber-200 hover:border-[var(--color-warning)] hover:bg-[var(--color-warning)]/25'
+                  : ''
+              }
+              onClick={() => void handleEnablePush()}
+            >
               Enable Push
             </Button>
           )}
