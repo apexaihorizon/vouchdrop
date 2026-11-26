@@ -1,3 +1,15 @@
+export type AllowedDocType =
+  | 'PDF'
+  | 'XLSX'
+  | 'DOCX'
+  | 'PPTX'
+  | 'ODS'
+  | 'ODT'
+  | 'ODP'
+  | 'CSV'
+  | 'TSV'
+  | 'FIG';
+
 export type SessionUser = {
   id: string;
   displayName: string;

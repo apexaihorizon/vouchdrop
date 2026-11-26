@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "vitest run"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.1",
@@ -30,6 +31,7 @@
     "drizzle-kit": "^0.31.11",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
+    "vitest": "^4.1.12",
     "wrangler": "^4.168.0"
   }
 }

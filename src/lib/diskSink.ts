@@ -2,6 +2,10 @@ import type { AllowedDocType } from '@/lib/fileGuard';
 
 export const MIME_MAP: Record<AllowedDocType, { description: string; accept: Record<string, string[]> }> = {
   PDF: { description: 'PDF Document', accept: { 'application/pdf': ['.pdf'] } },
+  XLSX: {
+    description: 'Excel Spreadsheet',
+    accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] },
+  },
   DOCX: {
     description: 'Word Document',
     accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] },
@@ -10,7 +14,20 @@ export const MIME_MAP: Record<AllowedDocType, { description: string; accept: Rec
     description: 'PowerPoint Presentation',
     accept: { 'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'] },
   },
+  ODS: {
+    description: 'OpenDocument Spreadsheet',
+    accept: { 'application/vnd.oasis.opendocument.spreadsheet': ['.ods'] },
+  },
+  ODT: {
+    description: 'OpenDocument Text',
+    accept: { 'application/vnd.oasis.opendocument.text': ['.odt'] },
+  },
+  ODP: {
+    description: 'OpenDocument Presentation',
+    accept: { 'application/vnd.oasis.opendocument.presentation': ['.odp'] },
+  },
   CSV: { description: 'CSV Spreadsheet', accept: { 'text/csv': ['.csv'] } },
+  TSV: { description: 'TSV Spreadsheet', accept: { 'text/tab-separated-values': ['.tsv'] } },
   FIG: { description: 'Figma Archive', accept: { 'application/octet-stream': ['.fig'] } },
 };
 

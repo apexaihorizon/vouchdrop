@@ -1,4 +1,5 @@
 import { openDiskSink, type DiskSink } from '@/lib/diskSink';
+import { toUserErrorMessage } from '@/lib/errors';
 import { createIncrementalHasher, validateWorkDocument, type AllowedDocType } from '@/lib/fileGuard';
 
 export const CHUNK_SIZE = 16 * 1024; // 16 KB
@@ -94,10 +95,12 @@ export class PeerTransferSession {
     this.callbacks.onProgress(0);
     this.callbacks.onReceipt(null);
 
-    const check = await validateWorkDocument(file);
-    if (!check.valid) {
+    let check: { valid: true; docType: AllowedDocType };
+    try {
+      check = await validateWorkDocument(file);
+    } catch (err) {
       this.callbacks.onStateChange('error');
-      this.callbacks.onMessage(check.reason);
+      this.callbacks.onMessage(toUserErrorMessage(err));
       return;
     }
 
