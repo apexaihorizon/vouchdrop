@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
+import { AppError } from '@/lib/errors';
+import { logEvent } from '@/lib/logger';
 
-export class AppError extends Error {
-  constructor(
-    public readonly message: string,
-    public readonly status: number = 400
-  ) {
-    super(message);
-  }
-}
+export { AppError };
 
 type RouteHandler = (req: Request) => Promise<NextResponse>;
 
@@ -17,19 +12,18 @@ export function withApiHandler(routeName: string, handler: RouteHandler): RouteH
       return await handler(req);
     } catch (err) {
       if (err instanceof AppError) {
-        console.warn(JSON.stringify({ level: 'warn', route: routeName, status: err.status, error: err.message }));
-        return NextResponse.json({ ok: false, error: err.message }, { status: err.status });
+        logEvent('warn', routeName, { code: err.code, status: err.httpStatus });
+        return NextResponse.json(
+          { ok: false, code: err.code, error: err.userMessage },
+          { status: err.httpStatus }
+        );
       }
 
-      console.error(
-        JSON.stringify({
-          level: 'error',
-          route: routeName,
-          status: 500,
-          error: err instanceof Error ? err.message : 'Unknown error',
-        })
+      logEvent('error', routeName, { code: 'INTERNAL_ERROR', status: 500 });
+      return NextResponse.json(
+        { ok: false, code: 'INTERNAL_ERROR', error: 'Something went wrong. Please try again.' },
+        { status: 500 }
       );
-      return NextResponse.json({ ok: false, error: 'Internal server error' }, { status: 500 });
     }
   };
 }

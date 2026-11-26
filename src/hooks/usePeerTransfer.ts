@@ -1,9 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PeerTransferSession, type IncomingMeta, type TransferState } from '@/lib/webrtcEngine';
+import {
+  PeerTransferSession,
+  type IncomingKnock,
+  type IncomingMeta,
+  type TransferState,
+} from '@/lib/webrtcEngine';
 
-export type { IncomingMeta, TransferState };
+export type { IncomingKnock, IncomingMeta, TransferState };
 
 export function usePeerTransfer() {
   const [state, setState] = useState<TransferState>('idle');
@@ -38,16 +43,23 @@ export function usePeerTransfer() {
     [getSession]
   );
 
+  const presentIncomingKnock = useCallback(
+    (knock: IncomingKnock) => getSession().presentIncomingKnock(knock),
+    [getSession]
+  );
+
   const joinIncomingRoom = useCallback(
     (roomId: string) => getSession().joinIncomingRoom(roomId),
     [getSession]
   );
 
-  const acceptTransfer = useCallback(() => getSession().acceptTransfer(), [getSession]);
+  const acceptIncoming = useCallback(() => getSession().acceptIncoming(), [getSession]);
 
-  const declineTransfer = useCallback(() => getSession().declineTransfer(), [getSession]);
+  const declineIncoming = useCallback(() => getSession().declineIncoming(), [getSession]);
 
   const cancelTransfer = useCallback(() => getSession().cancelTransfer(), [getSession]);
+
+  const resetTransfer = useCallback(() => getSession().reset(), [getSession]);
 
   return {
     state,
@@ -56,9 +68,13 @@ export function usePeerTransfer() {
     sha256Receipt,
     incomingMeta,
     startSend,
+    presentIncomingKnock,
     joinIncomingRoom,
-    acceptTransfer,
-    declineTransfer,
+    acceptIncoming,
+    declineIncoming,
+    acceptTransfer: acceptIncoming,
+    declineTransfer: declineIncoming,
     cancelTransfer,
+    resetTransfer,
   };
 }

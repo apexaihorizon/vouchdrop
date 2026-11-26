@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
-import { AppError } from './api';
+import { AppError } from '@/lib/errors';
 
 function getSecret(): Uint8Array {
   return new TextEncoder().encode(process.env.SESSION_SECRET ?? '');
@@ -63,7 +63,7 @@ export async function getSessionUserId(): Promise<string | null> {
 export async function requireUserId(): Promise<string> {
   const userId = await getSessionUserId();
   if (!userId) {
-    throw new AppError('Unauthorized — please sign in first', 401);
+    throw new AppError('AUTH_CANCELLED', 'Unauthorized — please sign in first.', 401);
   }
   return userId;
 }

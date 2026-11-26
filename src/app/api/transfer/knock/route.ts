@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import * as webpush from 'web-push'
+import * as webpush from 'web-push';
 import { and, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { pushSubscriptions, users, userContacts } from '@/db/schema';
-import { AppError, withApiHandler } from '@/lib/api';
+import { withApiHandler } from '@/lib/api';
+import { AppError } from '@/lib/errors';
+import { logEvent } from '@/lib/logger';
 import { mintSignalingTicket, requireUserId } from '@/lib/session';
 import { knockRequestSchema } from '@/lib/validators';
 
@@ -17,17 +19,17 @@ export const POST = withApiHandler('transfer.knock', async (req) => {
   const userId = await requireUserId();
   const parsed = knockRequestSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    throw new AppError('Invalid knock request', 400);
+    throw new AppError('INVALID_FILE_TYPE', 'Invalid transfer request.', 400);
   }
 
-  const { recipientId, fileName, fileSize } = parsed.data;
+  const { recipientId, fileName, fileSize, fileType } = parsed.data;
 
   // Enforce closed contact allowlist
   const allowed = await db.query.userContacts.findFirst({
     where: and(eq(userContacts.userId, userId), eq(userContacts.contactId, recipientId)),
   });
   if (!allowed) {
-    throw new AppError('Recipient is not in your trusted contacts', 403);
+    throw new AppError('NOT_PAIRED', 'Recipient is not in your trusted contacts.', 403);
   }
 
   const sender = await db.query.users.findFirst({ where: eq(users.id, userId) });
@@ -41,10 +43,10 @@ export const POST = withApiHandler('transfer.knock', async (req) => {
 
   const payload = JSON.stringify({
     roomId,
-    senderId: userId,
     senderName: sender?.displayName ?? 'Trusted Contact',
     fileName,
     fileSize,
+    fileType,
   });
 
   await Promise.allSettled(
@@ -56,7 +58,6 @@ export const POST = withApiHandler('transfer.knock', async (req) => {
           { TTL: 15, urgency: 'high' }
         );
       } catch (err: unknown) {
-        // Remove stale/revoked browser push endpoints automatically
         if (typeof err === 'object' && err !== null && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, sub.endpoint));
         }
@@ -64,6 +65,6 @@ export const POST = withApiHandler('transfer.knock', async (req) => {
     })
   );
 
-  console.info(JSON.stringify({ level: 'info', route: 'transfer.knock', userId, recipientId, roomId }));
+  logEvent('info', 'transfer.knock', { userId, recipientId, roomId });
   return NextResponse.json({ ok: true, roomId, ticket });
 });

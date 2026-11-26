@@ -8,12 +8,23 @@ import {
   type DragEvent,
   type ReactNode,
 } from 'react';
-import type { TrustedContact } from '@/types/vouchdrop';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { toUserErrorMessage } from '@/lib/errors';
+import { validateWorkDocument } from '@/lib/fileGuard';
+import {
+  ALL_ALLOWED_DOC_TYPES,
+  ALLOWED_FILE_ACCEPT,
+  type AllowedDocType,
+  type TrustedContact,
+} from '@/types/vouchdrop';
 
 type DocumentStageContextValue = {
   selectedFile: File | null;
   onSend: (recipientId: string, file: File) => void;
   onRefreshContacts: () => void;
+  onOpenPairModal: () => void;
   busy: boolean;
   sendingRecipientId: string | null;
 };
@@ -25,6 +36,7 @@ type DocumentStageProps = {
   onFileSelect: (file: File | null) => void;
   onSend: (recipientId: string, file: File) => void;
   onRefreshContacts: () => void;
+  onOpenPairModal: () => void;
   busy?: boolean;
   sendingRecipientId?: string | null;
   contactsSlot: ReactNode;
@@ -48,12 +60,41 @@ export function DocumentStage({
   onFileSelect,
   onSend,
   onRefreshContacts,
+  onOpenPairModal,
   busy = false,
   sendingRecipientId = null,
   contactsSlot,
 }: DocumentStageProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [verifiedType, setVerifiedType] = useState<AllowedDocType | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+
+  async function inspectAndSelect(file: File | null) {
+    setValidationError(null);
+    setVerifiedType(null);
+
+    if (!file) {
+      onFileSelect(null);
+      return;
+    }
+
+    setValidating(true);
+    try {
+      const result = await validateWorkDocument(file);
+      setVerifiedType(result.docType);
+      onFileSelect(file);
+    } catch (err) {
+      onFileSelect(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      setValidationError(toUserErrorMessage(err));
+    } finally {
+      setValidating(false);
+    }
+  }
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -70,11 +111,13 @@ export function DocumentStage({
     setIsDragging(false);
     const dropped = e.dataTransfer.files?.[0];
     if (dropped) {
-      onFileSelect(dropped);
+      void inspectAndSelect(dropped);
     }
   }
 
   function handleClearFile() {
+    setValidationError(null);
+    setVerifiedType(null);
     onFileSelect(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -87,28 +130,31 @@ export function DocumentStage({
         selectedFile,
         onSend,
         onRefreshContacts,
-        busy,
+        onOpenPairModal,
+        busy: busy || validating,
         sendingRecipientId,
       }}
     >
-      <section className="flex flex-col gap-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-5 shadow-sm sm:p-6">
-        {/* Dropzone Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-100">Document Stage</h2>
-            <p className="text-xs text-zinc-400">Stage a verified work document to stream directly to a partner.</p>
-          </div>
-          <span className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 py-1 font-mono text-[11px] text-zinc-400">
-            PDF · DOCX · PPTX · CSV · FIG
-          </span>
+      <Card
+        title="Send a Work Document"
+        subtitle="Drop a verified document below, then choose a trusted contact to stream directly over WebRTC."
+        className="flex flex-col gap-6"
+      >
+        {/* Allowlist badges */}
+        <div className="flex flex-wrap gap-1.5" aria-label="Supported document formats">
+          {ALL_ALLOWED_DOC_TYPES.map((type) => (
+            <Badge key={type} tone="neutral">
+              {type}
+            </Badge>
+          ))}
         </div>
 
         {/* Hidden native file input */}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.docx,.pptx,.csv,.fig"
-          onChange={(e) => onFileSelect(e.target.files?.[0] ?? null)}
+          accept={ALLOWED_FILE_ACCEPT}
+          onChange={(e) => void inspectAndSelect(e.target.files?.[0] ?? null)}
           className="sr-only"
           aria-label="Choose work document"
         />
@@ -128,13 +174,13 @@ export function DocumentStage({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`flex min-h-[168px] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+            className={`flex min-h-[180px] cursor-pointer flex-col items-center justify-center gap-3 rounded-[var(--radius-control)] border-2 border-dashed px-6 py-8 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
               isDragging
-                ? 'border-emerald-400 bg-emerald-500/10'
-                : 'border-zinc-700 bg-zinc-950/50 hover:border-emerald-500/60 hover:bg-zinc-950/80'
+                ? 'border-[var(--color-accent-hover)] bg-[var(--color-accent)]/10'
+                : 'border-[var(--color-border-strong)] bg-[var(--color-canvas)]/60 hover:border-[var(--color-accent)]/60 hover:bg-[var(--color-surface-elevated)]/60'
             }`}
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-emerald-400">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-elevated)] text-[var(--color-accent)]">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -152,52 +198,61 @@ export function DocumentStage({
             </span>
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium text-zinc-100">
-                Drop a work document here, or <span className="text-emerald-400 underline">browse</span>
+                {validating ? (
+                  'Inspecting document signature...'
+                ) : (
+                  <>
+                    Drop a work document here, or <span className="text-[var(--color-accent-hover)] underline">browse</span>
+                  </>
+                )}
               </p>
-              <p className="font-mono text-xs text-zinc-500">Magic-byte verified · Up to 2 GB · Direct P2P</p>
+              <p className="font-mono text-xs text-zinc-500">Magic-byte &amp; archive verified · Up to 2 GB · Direct P2P</p>
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-950/15 p-4">
+          <div className="flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--color-accent)]/35 bg-[var(--color-accent)]/10 p-4">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-11 shrink-0 items-center justify-center rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2.5 font-mono text-xs font-semibold text-emerald-300">
-                {getFormatBadge(selectedFile.name)}
-              </span>
+              <Badge tone="emerald" className="h-11 shrink-0 rounded-[var(--radius-control)] px-2.5 text-xs font-semibold">
+                {verifiedType ?? getFormatBadge(selectedFile.name)}
+              </Badge>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-zinc-100">{selectedFile.name}</p>
                 <p className="font-mono text-xs text-zinc-400">{formatFileSize(selectedFile.size)}</p>
               </div>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleClearFile}
               disabled={busy}
               aria-label="Clear selected file"
               title="Clear selected file"
-              className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/60 text-base text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100 disabled:opacity-40"
+              className="min-w-[44px] shrink-0 px-0 text-base"
             >
               ×
-            </button>
+            </Button>
           </div>
         )}
 
+        {validationError && (
+          <p className="rounded-[var(--radius-control)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/10 px-3.5 py-2.5 text-xs text-rose-300">
+            {validationError}
+          </p>
+        )}
+
         {/* Streamed Trusted Contacts List */}
-        <div className="flex flex-col gap-3 border-t border-zinc-800/80 pt-5">
+        <div className="flex flex-col gap-3 border-t border-[var(--color-border-subtle)] pt-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-zinc-200">Trusted Contacts</h3>
-            <button
-              type="button"
-              onClick={onRefreshContacts}
-              className="inline-flex min-h-[44px] items-center rounded-lg px-2 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-100"
-            >
+            <Button variant="ghost" size="sm" onClick={onRefreshContacts}>
               Refresh
-            </button>
+            </Button>
           </div>
 
           {contactsSlot}
         </div>
-      </section>
+      </Card>
     </DocumentStageContext.Provider>
   );
 }
@@ -211,12 +266,16 @@ export function TrustedContactsList({ contacts }: TrustedContactsListProps) {
 
   if (contacts.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/50 p-5 text-center">
-        <p className="text-sm font-medium text-zinc-200">No paired contacts yet</p>
-        <p className="mt-1 text-xs text-zinc-400">
-          Use the <strong className="text-zinc-200">Pair Trusted Contact</strong> card to generate or redeem a
-          6-character invite code.
-        </p>
+      <div className="flex flex-col items-center gap-3 rounded-[var(--radius-control)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-canvas)]/50 p-6 text-center">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">No paired contacts yet</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Pair with a colleague using a short-lived 6-character invite code to start streaming documents.
+          </p>
+        </div>
+        <Button variant="primary" size="sm" onClick={() => ctx?.onOpenPairModal()}>
+          + Add Contact
+        </Button>
       </div>
     );
   }
@@ -232,10 +291,10 @@ export function TrustedContactsList({ contacts }: TrustedContactsListProps) {
         return (
           <div
             key={contact.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-4 py-3 transition-colors hover:border-zinc-700/80"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-elevated)]/70 px-4 py-3 transition-colors hover:border-[var(--color-border-strong)]"
           >
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-xs font-semibold text-zinc-200">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] text-xs font-semibold text-zinc-200">
                 {initial}
               </span>
               <div className="min-w-0">
@@ -244,21 +303,16 @@ export function TrustedContactsList({ contacts }: TrustedContactsListProps) {
               </div>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant={hasFile && !ctx?.busy ? 'primary' : 'secondary'}
+              size="sm"
+              loading={isSendingThis}
               disabled={isDisabled}
               title={!hasFile ? 'Select a file first' : `Send ${ctx?.selectedFile?.name} to ${contact.displayName}`}
               onClick={() => ctx?.selectedFile && ctx.onSend(contact.id, ctx.selectedFile)}
-              className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 text-xs font-semibold transition-colors ${
-                isSendingThis
-                  ? 'animate-pulse bg-emerald-500/80 text-zinc-950'
-                  : hasFile && !ctx?.busy
-                    ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400'
-                    : 'border border-zinc-800 bg-zinc-900 text-zinc-500'
-              }`}
             >
               {isSendingThis ? 'Sending...' : hasFile ? 'Send' : 'Select a file first'}
-            </button>
+            </Button>
           </div>
         );
       })}

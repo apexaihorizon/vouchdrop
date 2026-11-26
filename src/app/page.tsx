@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
 
 const CAPABILITIES = [
   {
@@ -45,7 +47,7 @@ const CAPABILITIES = [
   {
     title: 'SHA-256 & Magic-Byte Verified',
     description:
-      'Every transfer validates document headers (PDF, DOCX, PPTX, CSV, FIG) before streaming and computes an incremental SHA-256 receipt on both peers.',
+      'Every transfer validates document headers (PDF, XLSX, DOCX, PPTX, ODS, ODT, ODP, CSV, TSV, FIG) before streaming and computes an incremental SHA-256 receipt on both peers.',
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -66,12 +68,12 @@ const CAPABILITIES = [
 
 export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-12 bg-zinc-950 px-4 py-14 sm:py-20">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-12 bg-[var(--color-canvas)] px-4 py-14 sm:py-20">
       <section className="mx-auto flex max-w-2xl flex-col items-center gap-6 text-center">
-        <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-wider text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+        <Badge tone="emerald" className="px-3 py-1 uppercase tracking-wider">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent-hover)]" aria-hidden="true" />
           Zero-Storage WebRTC Courier
-        </span>
+        </Badge>
 
         <h1 className="text-balance text-4xl font-semibold tracking-tight text-zinc-50 sm:text-5xl">
           Zero-storage encrypted document courier.
@@ -85,13 +87,13 @@ export default function HomePage() {
         <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/app"
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm transition-colors hover:bg-emerald-400"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--radius-control)] bg-[var(--color-accent)] px-6 py-2.5 text-sm font-semibold text-zinc-950 shadow-sm transition-colors hover:bg-[var(--color-accent-hover)]"
           >
             Use App
           </Link>
           <Link
             href="/about"
-            className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-white"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-border-subtle)] bg-[var(--color-surface)] px-5 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-elevated)] hover:text-white"
           >
             Security Architecture
           </Link>
@@ -100,16 +102,17 @@ export default function HomePage() {
 
       <section aria-label="Core capabilities" className="grid grid-cols-1 gap-4 md:grid-cols-3">
         {CAPABILITIES.map((item) => (
-          <article
+          <Card
             key={item.title}
-            className="flex flex-col gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/50 p-6 transition-colors hover:border-zinc-700/80"
+            padding="md"
+            className="flex flex-col gap-3 transition-colors hover:border-[var(--color-border-strong)]"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-control)] border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/10 text-[var(--color-accent-hover)]">
               {item.icon}
             </div>
             <h2 className="text-sm font-semibold tracking-tight text-zinc-100">{item.title}</h2>
             <p className="text-xs leading-relaxed text-zinc-400">{item.description}</p>
-          </article>
+          </Card>
         ))}
       </section>
     </main>

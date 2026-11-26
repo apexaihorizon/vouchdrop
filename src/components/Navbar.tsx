@@ -2,16 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Badge } from '@/components/ui/Badge';
 
 export function Navbar() {
   const pathname = usePathname();
   const showUseApp = pathname !== '/app';
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-[var(--color-border-subtle)] bg-[var(--color-canvas)]/80 backdrop-blur-md">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3.5">
         <Link href="/" className="group flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 transition-colors group-hover:border-emerald-400/50 group-hover:bg-emerald-500/15">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-accent)]/35 bg-[var(--color-accent)]/10 text-[var(--color-accent-hover)] transition-colors group-hover:border-[var(--color-accent-hover)]/50 group-hover:bg-[var(--color-accent)]/15">
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -30,22 +31,22 @@ export function Navbar() {
           <span className="text-sm font-semibold tracking-tight text-zinc-100 group-hover:text-white">
             VouchDrop
           </span>
-          <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+          <Badge tone="neutral" className="text-[10px] uppercase tracking-wider">
             P2P
-          </span>
+          </Badge>
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Link
             href="/about"
-            className="inline-flex min-h-[44px] items-center rounded-lg px-3 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+            className="inline-flex min-h-[44px] items-center rounded-[var(--radius-control)] px-3 text-xs font-medium text-zinc-400 transition-colors hover:bg-[var(--color-surface-elevated)] hover:text-zinc-100"
           >
             Security
           </Link>
           {showUseApp && (
             <Link
               href="/app"
-              className="inline-flex min-h-[44px] items-center rounded-xl bg-emerald-500 px-3.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-emerald-400"
+              className="inline-flex min-h-[44px] items-center rounded-[var(--radius-control)] bg-[var(--color-accent)] px-3.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-[var(--color-accent-hover)]"
             >
               Use App
             </Link>

@@ -8,8 +8,15 @@ import {
   type PublicKeyCredentialCreationOptionsJSON,
   type PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
-import { DISPLAY_NAME_ERROR, DISPLAY_NAME_REGEX, normalizeDisplayName } from '@/lib/validators';
-import type { SessionUser } from '@/types/vouchdrop';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { AppError, toUserErrorMessage } from '@/lib/errors';
+import {
+  authVerifyResponseSchema,
+  DISPLAY_NAME_ERROR,
+  displayNameSchema,
+} from '@/lib/validators';
 
 type AuthFlowProps = {
   initialRoomId: string | null;
@@ -17,32 +24,7 @@ type AuthFlowProps = {
 
 type AuthMode = 'choose' | 'login' | 'signup';
 
-type VerifyAuthResponse = {
-  user?: SessionUser;
-};
-
 const GENERIC_AUTH_ERROR = 'Authentication could not be completed. Please try again.';
-
-function mapAuthError(err: unknown): string {
-  if (err instanceof Error) {
-    switch (err.name) {
-      case 'NotAllowedError':
-        return 'Passkey prompt was cancelled or timed out. Click below to try again.';
-      case 'SecurityError':
-        return 'Passkeys require a secure HTTPS connection.';
-      case 'InvalidStateError':
-        return 'This device already has a passkey registered for this account.';
-      case 'NotSupportedError':
-        return 'Passkeys are not supported on this browser or device.';
-    }
-  }
-  return GENERIC_AUTH_ERROR;
-}
-
-function isValidDisplayName(raw: string): boolean {
-  const normalized = normalizeDisplayName(raw);
-  return normalized.length >= 2 && normalized.length <= 32 && DISPLAY_NAME_REGEX.test(normalized);
-}
 
 export function AuthFlow({ initialRoomId }: AuthFlowProps) {
   const router = useRouter();
@@ -53,7 +35,7 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
   const attemptRef = useRef(0);
 
   const destination = initialRoomId ? `/app?room=${encodeURIComponent(initialRoomId)}` : '/app';
-  const displayNameValid = isValidDisplayName(displayName);
+  const displayNameValid = displayNameSchema.safeParse(displayName).success;
 
   function switchMode(nextMode: AuthMode) {
     attemptRef.current += 1;
@@ -72,12 +54,14 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
       const optRes = await fetch('/api/auth/login/options', { method: 'POST' });
       if (attemptRef.current !== attemptId) return;
       if (!optRes.ok) {
-        setError(GENERIC_AUTH_ERROR);
-        return;
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, optRes.status);
       }
 
-      const options = (await optRes.json()) as PublicKeyCredentialRequestOptionsJSON;
+      const options = (await optRes.json().catch(() => null)) as PublicKeyCredentialRequestOptionsJSON | null;
       if (attemptRef.current !== attemptId) return;
+      if (!options || typeof options.challenge !== 'string') {
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, 500);
+      }
 
       const assertion = await startAuthentication({ optionsJSON: options });
       if (attemptRef.current !== attemptId) return;
@@ -89,22 +73,20 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
       });
       if (attemptRef.current !== attemptId) return;
       if (!verRes.ok) {
-        setError(GENERIC_AUTH_ERROR);
-        return;
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, verRes.status);
       }
 
-      const result = (await verRes.json()) as VerifyAuthResponse;
+      const parsed = authVerifyResponseSchema.safeParse(await verRes.json().catch(() => null));
       if (attemptRef.current !== attemptId) return;
-      if (!result.user) {
-        setError(GENERIC_AUTH_ERROR);
-        return;
+      if (!parsed.success) {
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, 500);
       }
 
       router.replace(destination);
       router.refresh();
     } catch (err) {
       if (attemptRef.current !== attemptId) return;
-      setError(mapAuthError(err));
+      setError(toUserErrorMessage(err));
     } finally {
       if (attemptRef.current === attemptId) {
         setBusy(false);
@@ -114,8 +96,8 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
 
   async function handleSignup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const normalized = normalizeDisplayName(displayName);
-    if (!isValidDisplayName(normalized)) {
+    const parsedName = displayNameSchema.safeParse(displayName);
+    if (!parsedName.success) {
       setError(DISPLAY_NAME_ERROR);
       return;
     }
@@ -128,16 +110,22 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
       const optRes = await fetch('/api/auth/register/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: normalized }),
+        body: JSON.stringify({ displayName: parsedName.data }),
       });
       if (attemptRef.current !== attemptId) return;
       if (!optRes.ok) {
-        setError(optRes.status === 400 ? DISPLAY_NAME_ERROR : GENERIC_AUTH_ERROR);
-        return;
+        throw new AppError(
+          'AUTH_CANCELLED',
+          optRes.status === 400 ? DISPLAY_NAME_ERROR : GENERIC_AUTH_ERROR,
+          optRes.status
+        );
       }
 
-      const options = (await optRes.json()) as PublicKeyCredentialCreationOptionsJSON;
+      const options = (await optRes.json().catch(() => null)) as PublicKeyCredentialCreationOptionsJSON | null;
       if (attemptRef.current !== attemptId) return;
+      if (!options || typeof options.challenge !== 'string') {
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, 500);
+      }
 
       const attestation = await startRegistration({ optionsJSON: options });
       if (attemptRef.current !== attemptId) return;
@@ -149,22 +137,20 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
       });
       if (attemptRef.current !== attemptId) return;
       if (!verRes.ok) {
-        setError(GENERIC_AUTH_ERROR);
-        return;
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, verRes.status);
       }
 
-      const result = (await verRes.json()) as VerifyAuthResponse;
+      const parsed = authVerifyResponseSchema.safeParse(await verRes.json().catch(() => null));
       if (attemptRef.current !== attemptId) return;
-      if (!result.user) {
-        setError(GENERIC_AUTH_ERROR);
-        return;
+      if (!parsed.success) {
+        throw new AppError('AUTH_CANCELLED', GENERIC_AUTH_ERROR, 500);
       }
 
       router.replace(destination);
       router.refresh();
     } catch (err) {
       if (attemptRef.current !== attemptId) return;
-      setError(mapAuthError(err));
+      setError(toUserErrorMessage(err));
     } finally {
       if (attemptRef.current === attemptId) {
         setBusy(false);
@@ -174,9 +160,9 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-12">
-      <section className="flex flex-col gap-6 rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-6 shadow-sm sm:p-8">
+      <Card padding="lg" className="flex flex-col gap-6">
         {initialRoomId && (
-          <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-xs text-amber-200">
+          <div className="rounded-[var(--radius-control)] border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 px-4 py-3 text-xs text-amber-200">
             Incoming transfer waiting in room{' '}
             <span className="font-mono font-semibold text-amber-300">{initialRoomId}</span>. Authenticate to inspect
             and accept.
@@ -186,9 +172,9 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
         {mode === 'choose' && (
           <>
             <div className="flex flex-col gap-2">
-              <span className="w-fit rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[11px] font-medium text-emerald-300">
+              <Badge tone="emerald" className="w-fit">
                 WebAuthn Passkeys
-              </span>
+              </Badge>
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Authenticate to VouchDrop</h1>
               <p className="text-sm leading-relaxed text-zinc-400">
                 Sign in with an existing device passkey or create a new hardware-backed identity.
@@ -196,21 +182,12 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
             </div>
 
             <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => void handleLogin()}
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-400"
-              >
+              <Button variant="primary" className="w-full" onClick={() => void handleLogin()}>
                 Sign In
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchMode('signup')}
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-zinc-700 bg-zinc-950/60 px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-900 hover:text-white"
-              >
+              </Button>
+              <Button variant="secondary" className="w-full" onClick={() => switchMode('signup')}>
                 Create Account
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -225,35 +202,26 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
             </div>
 
             {busy && (
-              <div className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-xs text-zinc-300">
-                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" aria-hidden="true" />
+              <div className="flex items-center gap-3 rounded-[var(--radius-control)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-elevated)] px-4 py-3 text-xs text-zinc-300">
+                <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--color-accent)]" aria-hidden="true" />
                 <span>Waiting for device passkey...</span>
               </div>
             )}
 
             {error && (
               <div className="flex flex-col gap-3">
-                <p className="rounded-xl border border-red-500/30 bg-red-950/20 px-3.5 py-2.5 text-xs text-red-300">
+                <p className="rounded-[var(--radius-control)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/10 px-3.5 py-2.5 text-xs text-rose-300">
                   {error}
                 </p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void handleLogin()}
-                  className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
-                >
+                <Button variant="primary" className="w-full" loading={busy} onClick={() => void handleLogin()}>
                   Try Again
-                </button>
+                </Button>
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => switchMode('choose')}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
-            >
+            <Button variant="ghost" size="sm" className="w-full" onClick={() => switchMode('choose')}>
               ← Back
-            </button>
+            </Button>
           </>
         )}
 
@@ -276,7 +244,7 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
                 autoFocus
                 maxLength={32}
                 aria-describedby="display-name-hint"
-                className="min-h-[44px] rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-emerald-500/60 focus:outline-none"
+                className="min-h-[44px] rounded-[var(--radius-control)] border border-[var(--color-border-strong)] bg-[var(--color-canvas)] px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[var(--color-accent)] focus:outline-none"
                 placeholder="e.g. Alex Rivera"
                 value={displayName}
                 onChange={(e) => {
@@ -291,31 +259,22 @@ export function AuthFlow({ initialRoomId }: AuthFlowProps) {
             </div>
 
             {error && (
-              <p className="rounded-xl border border-red-500/30 bg-red-950/20 px-3.5 py-2.5 text-xs text-red-300">
+              <p className="rounded-[var(--radius-control)] border border-[var(--color-danger)]/35 bg-[var(--color-danger)]/10 px-3.5 py-2.5 text-xs text-rose-300">
                 {error}
               </p>
             )}
 
             <div className="flex flex-col gap-2.5">
-              <button
-                type="submit"
-                disabled={busy || !displayNameValid}
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-400 disabled:opacity-40"
-              >
+              <Button type="submit" variant="primary" className="w-full" loading={busy} disabled={!displayNameValid}>
                 {busy ? 'Creating Passkey...' : 'Create Passkey'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchMode('choose')}
-                className="inline-flex min-h-[44px] w-full items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-2 text-xs font-medium text-zinc-300 transition-colors hover:border-zinc-700 hover:text-zinc-100"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" className="w-full" onClick={() => switchMode('choose')}>
                 ← Back
-              </button>
+              </Button>
             </div>
           </form>
         )}
-      </section>
+      </Card>
     </main>
   );
 }

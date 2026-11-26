@@ -104,9 +104,12 @@ export class TransferRoom extends DurableObject<Env> {
     this.broadcastExcept(ws, message);
   }
 
-  async webSocketClose(ws: WebSocket) {
-    this.broadcastExcept(ws, JSON.stringify({ type: 'PEER_LEFT' }));
+  async webSocketClose(ws: WebSocket, code: number, reason: string) {
     await this.ctx.storage.deleteAlarm();
+    if (code === 1000 && reason === 'P2P_ESTABLISHED') {
+      return;
+    }
+    this.broadcastExcept(ws, JSON.stringify({ type: 'PEER_LEFT' }));
   }
 
   async alarm() {

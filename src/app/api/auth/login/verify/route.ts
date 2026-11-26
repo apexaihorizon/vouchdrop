@@ -3,26 +3,28 @@ import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { users, webauthnCredentials } from '@/db/schema';
-import { AppError, withApiHandler } from '@/lib/api';
+import { withApiHandler } from '@/lib/api';
+import { AppError } from '@/lib/errors';
+import { logEvent } from '@/lib/logger';
 import { getChallengeCookie, setSessionCookie } from '@/lib/session';
 import { loginVerifySchema } from '@/lib/validators';
 
 export const POST = withApiHandler('auth.login.verify', async (req) => {
   const challengeData = await getChallengeCookie();
   if (!challengeData?.challenge) {
-    throw new AppError('Login expired, please try again', 400);
+    throw new AppError('AUTH_CANCELLED', 'Sign-in expired. Please try again.', 400);
   }
 
   const parsed = loginVerifySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    throw new AppError('Malformed login payload', 400);
+    throw new AppError('AUTH_CANCELLED', 'Malformed passkey payload.', 400);
   }
 
   const cred = await db.query.webauthnCredentials.findFirst({
     where: eq(webauthnCredentials.id, parsed.data.id),
   });
   if (!cred) {
-    throw new AppError('Passkey not recognized on this server', 404);
+    throw new AppError('AUTH_CANCELLED', 'Passkey not recognized on this server.', 404);
   }
 
   let verification;
@@ -39,12 +41,12 @@ export const POST = withApiHandler('auth.login.verify', async (req) => {
         transports: cred.transports as never,
       },
     });
-  } catch (err) {
-    throw new AppError(err instanceof Error ? err.message : 'Login verification failed', 400);
+  } catch {
+    throw new AppError('AUTH_CANCELLED', 'Passkey sign-in verification failed.', 400);
   }
 
   if (!verification.verified) {
-    throw new AppError('Login verification failed', 400);
+    throw new AppError('AUTH_CANCELLED', 'Passkey sign-in verification failed.', 400);
   }
 
   await db
@@ -56,11 +58,11 @@ export const POST = withApiHandler('auth.login.verify', async (req) => {
     where: eq(users.id, cred.userId),
   });
   if (!user) {
-    throw new AppError('User account not found', 404);
+    throw new AppError('AUTH_CANCELLED', 'User account not found.', 404);
   }
 
   await setSessionCookie(user.id);
-  console.info(JSON.stringify({ level: 'info', route: 'auth.login.verify', userId: user.id }));
+  logEvent('info', 'auth.login.verify', { userId: user.id });
 
   return NextResponse.json({ ok: true, user: { id: user.id, displayName: user.displayName } });
 });

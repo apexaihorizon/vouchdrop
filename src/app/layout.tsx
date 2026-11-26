@@ -47,15 +47,17 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full dark`}>
-      <body className="flex min-h-screen flex-col bg-zinc-950 font-sans text-zinc-100 antialiased selection:bg-emerald-500/20 selection:text-emerald-200">
+      <body className="flex min-h-screen flex-col bg-[var(--color-canvas)] font-sans text-zinc-100 antialiased selection:bg-[var(--color-accent)]/20 selection:text-emerald-200">
         <Navbar />
 
         <div className="flex flex-1 flex-col">{children}</div>
 
-        <footer className="mt-auto border-t border-zinc-900">
+        <footer className="mt-auto border-t border-[var(--color-border-subtle)]">
           <div className="mx-auto flex max-w-5xl flex-col gap-2 px-4 py-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
             <p>Zero-storage WebRTC courier · Files never touch a server · SHA-256 verified</p>
-            <p className="font-mono text-[11px] text-zinc-400">PDF · DOCX · PPTX · CSV · FIG (≤ 2 GB)</p>
+            <p className="font-mono text-[11px] text-zinc-400">
+              PDF · XLSX · DOCX · PPTX · ODS · ODT · ODP · CSV · TSV · FIG (≤ 2 GB)
+            </p>
           </div>
         </footer>
       </body>
