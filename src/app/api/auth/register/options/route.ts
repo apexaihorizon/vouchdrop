@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { generateRegistrationOptions } from '@simplewebauthn/server';
 import { setChallengeCookie } from '@/lib/session';
-import { registerOptionsSchema } from '@/lib/validators';
+import { DISPLAY_NAME_ERROR, registerOptionsSchema } from '@/lib/validators';
 import { AppError, withApiHandler } from '@/lib/api';
 export const POST = withApiHandler('auth.register.options', async (req) => {
     const parsed = registerOptionsSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
-        throw new AppError('Invalid input please try again', 400);
+        throw new AppError(parsed.error.issues[0]?.message ?? DISPLAY_NAME_ERROR, 400);
     }
 
     const { displayName } = parsed.data;

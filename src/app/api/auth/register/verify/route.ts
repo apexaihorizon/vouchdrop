@@ -4,12 +4,17 @@ import { db } from '@/db';
 import { users, webauthnCredentials } from '@/db/schema';
 import { AppError, withApiHandler } from '@/lib/api';
 import { getChallengeCookie, setSessionCookie } from '@/lib/session';
-import { registerVerifySchema } from '@/lib/validators';
+import { DISPLAY_NAME_ERROR, displayNameSchema, registerVerifySchema } from '@/lib/validators';
 
 export const POST = withApiHandler('auth.register.verify', async (req) => {
     const challengeData = await getChallengeCookie();
     if (!challengeData?.challenge || !challengeData.displayName) {
         throw new AppError('Registration expired, please try again', 400);
+    }
+
+    const validatedName = displayNameSchema.safeParse(challengeData.displayName);
+    if (!validatedName.success) {
+        throw new AppError(validatedName.error.issues[0]?.message ?? DISPLAY_NAME_ERROR, 400);
     }
 
     const parsed = registerVerifySchema.safeParse(await req.json().catch(() => null));
@@ -25,8 +30,8 @@ export const POST = withApiHandler('auth.register.verify', async (req) => {
             expectedOrigin: process.env.RP_ORIGIN!,
             expectedRPID: process.env.RP_ID!,
         });
-    } catch (err) {
-        throw new AppError(err instanceof Error ? err.message : 'Passkey verification failed', 400);
+    } catch {
+        throw new AppError('Passkey verification failed', 400);
     }
 
     if (!verification.verified || !verification.registrationInfo) {
@@ -37,7 +42,7 @@ export const POST = withApiHandler('auth.register.verify', async (req) => {
 
     const [newUser] = await db
         .insert(users)
-        .values({ displayName: challengeData.displayName })
+        .values({ displayName: validatedName.data })
         .returning();
 
     await db.insert(webauthnCredentials).values({

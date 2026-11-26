@@ -1,12 +1,27 @@
 import { z } from 'zod';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 
+export const DISPLAY_NAME_REGEX = /^[a-zA-Z0-9 _.-]+$/;
+export const DISPLAY_NAME_ERROR =
+  "Display name must be 2–32 characters using letters, numbers, spaces, '.', '_', or '-'.";
+
+export function normalizeDisplayName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+export const displayNameSchema = z
+  .string()
+  .transform(normalizeDisplayName)
+  .pipe(
+    z
+      .string()
+      .min(2, DISPLAY_NAME_ERROR)
+      .max(32, DISPLAY_NAME_ERROR)
+      .regex(DISPLAY_NAME_REGEX, DISPLAY_NAME_ERROR)
+  );
+
 export const registerOptionsSchema = z.object({
-  displayName: z
-    .string()
-    .trim()
-    .min(2, 'Display name must be at least 2 characters')
-    .max(40, 'Display name must be 40 characters or fewer'),
+  displayName: displayNameSchema,
 });
 
 export const registerVerifySchema: z.ZodType<RegistrationResponseJSON> = z.object({

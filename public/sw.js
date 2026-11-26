@@ -8,14 +8,14 @@ self.addEventListener('push', (event) => {
       tag: `vd-knock-${data.roomId}`,
       renotify: true,
       requireInteraction: true,
-      data: { url: `/?room=${encodeURIComponent(data.roomId)}` },
+      data: { url: `/app?room=${encodeURIComponent(data.roomId)}` },
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || '/';
+  const targetUrl = event.notification.data?.url || '/app';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {

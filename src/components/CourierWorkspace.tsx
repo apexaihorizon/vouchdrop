@@ -88,6 +88,7 @@ export function CourierWorkspace({ user, initialRoomId, contactsSlot }: CourierW
   async function handleSignOut() {
     await transfer.cancelTransfer().catch(() => {});
     await fetch('/api/auth/logout', { method: 'POST' });
+    router.replace('/');
     router.refresh();
   }
 
